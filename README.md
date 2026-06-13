@@ -80,7 +80,26 @@ npm run tauri:dev      # run the app in dev mode
 npm run tauri:build    # produce an installer under src-tauri/target/release/bundle/nsis
 ```
 
-The Python worker lives at `python/qwen_angle_worker.py` and is bundled as a
+## AI Agent Control (local HTTP API)
+
+Like the other apps in the suite, Multi-Angle Edit can expose a local HTTP API
+so trusted tools (Codex, Claude Code, other agents) on the same machine can drive
+it. It is **off by default**, binds to `127.0.0.1`, defaults to port **17339**,
+and is toggled from the in-app "AI Agent Control" panel. When enabled it
+publishes its status to the shared registry at
+`%APPDATA%\NekoLegends\agent-api-registry.json`, which the Neko Legends Control
+Center reads to show live status and flag port conflicts.
+
+Endpoints:
+
+- `GET /health` — API status (enabled, port).
+- `GET /openapi.json` — OpenAPI description.
+- `GET /gpus` — list detected GPUs.
+- `GET /store` — shared NekoLegendsAI store info.
+- `POST /generate` — run a multi-angle edit. Body:
+  `{ "imagePath": "...", "anglePrompt": "<sks> right side view ...", "deviceIndex": 0, "extraPrompt": "", "outputDir": "" }`
+
+The Python worker lives at `python/multi_angle_worker.py` and is bundled as a
 Tauri resource. It is a two-phase script: launched under the system Python it
 bootstraps the venv, then re-execs itself inside that venv to run inference.
 

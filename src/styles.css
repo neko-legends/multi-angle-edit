@@ -491,3 +491,82 @@ button:disabled {
     min-height: 360px;
   }
 }
+
+/* ---- AI Agent Control panel ---- */
+.agent-panel {
+  gap: 10px;
+}
+.agent-desc {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-dim);
+  line-height: 1.4;
+}
+.agent-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.agent-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+}
+.agent-toggle input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+.agent-port {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.agent-port label {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.agent-port-input {
+  width: 84px;
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-card);
+  color: var(--text);
+  font-size: 13px;
+}
+.agent-port-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.agent-urls {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 4px;
+  border-top: 1px solid var(--border);
+}
+.agent-urls > div {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.agent-url-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--accent);
+  font-weight: 700;
+  min-width: 52px;
+}
+.agent-urls code {
+  font-size: 12px;
+  color: var(--text-dim);
+  word-break: break-all;
+}

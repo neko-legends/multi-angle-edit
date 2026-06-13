@@ -43,6 +43,16 @@ interface StoreInfo {
   modelsDir: string;
 }
 
+interface AgentServerStatus {
+  enabled: boolean;
+  port: number;
+  url: string;
+  openapiUrl: string;
+  busy: boolean;
+  activeJobId: string | null;
+  message: string;
+}
+
 type WorkerEvent =
   | { type: "setup"; message: string }
   | { type: "progress"; message: string; percent?: number }
@@ -64,6 +74,10 @@ export default function App() {
   const [deviceIndex, setDeviceIndex] = useState<number>(0);
   const [extraPrompt, setExtraPrompt] = useState<string>("");
   const [store, setStore] = useState<StoreInfo | null>(null);
+
+  const [agent, setAgent] = useState<AgentServerStatus | null>(null);
+  const [agentPort, setAgentPort] = useState<number>(17339);
+  const [agentBusy, setAgentBusy] = useState(false);
 
   const [running, setRunning] = useState(false);
   const [percent, setPercent] = useState<number | null>(null);
@@ -98,6 +112,15 @@ export default function App() {
     invoke<StoreInfo>("store_info")
       .then(setStore)
       .catch((e) => pushLog("error", `Failed to read store info: ${String(e)}`));
+
+    invoke<AgentServerStatus>("get_agent_server_status")
+      .then((status) => {
+        setAgent(status);
+        if (status.port > 0) setAgentPort(status.port);
+      })
+      .catch((e) =>
+        pushLog("error", `Failed to read agent status: ${String(e)}`),
+      );
   }, [pushLog]);
 
   // ---- worker event stream ------------------------------------------------
@@ -191,6 +214,31 @@ export default function App() {
       pushLog("error", `Could not open folder: ${String(e)}`),
     );
   }, [outputDir, pushLog]);
+
+  const toggleAgent = useCallback(
+    async (enabled: boolean) => {
+      setAgentBusy(true);
+      try {
+        const status = await invoke<AgentServerStatus>(
+          "set_agent_server_enabled",
+          { enabled, port: agentPort },
+        );
+        setAgent(status);
+        if (status.port > 0) setAgentPort(status.port);
+        pushLog(
+          "info",
+          enabled
+            ? `Agent API enabled at ${status.url}`
+            : "Agent API disabled.",
+        );
+      } catch (e) {
+        pushLog("error", `Agent API change failed: ${String(e)}`);
+      } finally {
+        setAgentBusy(false);
+      }
+    },
+    [agentPort, pushLog],
+  );
 
   // ---- render -------------------------------------------------------------
   return (
@@ -379,6 +427,53 @@ export default function App() {
               )}
               <div ref={logEndRef} />
             </div>
+          </div>
+
+          <div className="card agent-panel">
+            <div className="card-title">
+              <Cpu size={16} /> AI Agent Control
+            </div>
+            <p className="agent-desc">
+              Local HTTP API for AI agents. Off by default, binds to
+              127.0.0.1.
+            </p>
+            <div className="agent-row">
+              <label className="agent-toggle">
+                <input
+                  type="checkbox"
+                  checked={agent?.enabled ?? false}
+                  disabled={agentBusy}
+                  onChange={(e) => toggleAgent(e.target.checked)}
+                />
+                <span>{agent?.enabled ? "Enabled" : "Disabled"}</span>
+              </label>
+              <div className="agent-port">
+                <label>Port</label>
+                <input
+                  className="agent-port-input"
+                  type="number"
+                  min={1}
+                  max={65535}
+                  value={agentPort}
+                  disabled={agentBusy || (agent?.enabled ?? false)}
+                  onChange={(e) =>
+                    setAgentPort(Number(e.target.value) || 17339)
+                  }
+                />
+              </div>
+            </div>
+            {agent?.enabled && (
+              <div className="agent-urls">
+                <div>
+                  <span className="agent-url-label">url</span>
+                  <code>{agent.url}</code>
+                </div>
+                <div>
+                  <span className="agent-url-label">openapi</span>
+                  <code>{agent.openapiUrl}</code>
+                </div>
+              </div>
+            )}
           </div>
         </section>
       </main>
