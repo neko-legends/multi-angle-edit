@@ -1,107 +1,171 @@
 # Multi-Angle Edit
 
-Local, GPU-powered **multi-angle image editor**. Load an image, dial in a new
-camera angle with an interactive 3D picker, and re-render the shot from that
-angle using **Qwen-Image-Edit** plus the **Multiple-Angles LoRA** — all on your
-own machine.
+Multi-Angle Edit turns one source image into a new camera angle. Pick an image,
+aim a simple 3D camera widget, and generate a new view such as front, side,
+back, high-angle, close-up, or wide shot.
 
-Part of the Neko Legends / ForPublic suite. It shares the same Tauri + React +
-Python-worker pattern as DepthMap AI Generator and ImageToHunyuan3D, and uses the
-shared **NekoLegendsAI** store so PyTorch wheels and Hugging Face models are
-downloaded once and reused across every app in the suite.
+The app is designed for **Qwen-Image-Edit** with the
+**Multiple-Angles LoRA** camera-angle add-on. It can also send edits through
+[Venice Media Local](https://github.com/neko-legends/VeniceMediaLocal), but
+other image-edit models may not follow the Qwen angle vocabulary as reliably.
 
-## What it does
+Part of the Neko Legends / ForPublic suite. It shares the same
+**NekoLegendsAI** model cache used by the other local AI tools, so Python wheels
+and Hugging Face models can be reused instead of downloaded over and over.
 
-1. **Pick an image.** PNG / JPG / WebP.
-2. **Aim the camera.** An interactive Three.js viewport lets you orbit the
-   subject: drag to set azimuth (0–360°) and elevation (−30°…60°), scroll to set
-   distance (close-up / medium / wide). Sliders and quick-select presets stay in
-   sync with the 3D handles.
-3. **Choose a GPU.** Detected via `nvidia-smi`; CPU fallback is available but
-   slow. Built and tested for an RTX 5090 + RTX 3090 workstation.
-4. **Generate.** The angle is formatted into the LoRA's prompt vocabulary
-   (`<sks> right side view high-angle shot close-up`), and the image is
-   re-rendered from the new viewpoint. Progress streams live; the result lands in
-   the output folder next to the app.
+![Multi-Angle Edit showing a loaded source image, angle viewport, provider controls, and generated result](docs/images/multi-angle-edit.png)
 
-## Why standalone (and not just a ComfyUI node)
+## Quick Start
 
-The angle-picker idea is inspired by the excellent
-[ComfyUI-qwenmultiangle](https://github.com/jtydhr88/ComfyUI-qwenmultiangle)
-node, but this is an **original standalone app** with no ComfyUI dependency. The
-real multi-angle re-render genuinely needs the Qwen-Image-Edit model plus the
-`fal/Qwen-Image-Edit-2511-Multiple-Angles-LoRA` weights, which is why this app
-exists for people with their own GPUs. (A no-GPU "approximate angle" path that
-routes the same picker through a hosted general image editor lives in the
-companion Venice Media Local app.)
+1. **Choose an image.** PNG, JPG, JPEG, and WebP are supported.
+2. **Aim the camera.** Left-drag in the viewport to orbit. Middle-drag or scroll
+   to zoom between close-up, medium, and wide shots. The sliders on the right
+   stay in sync with the 3D view.
+3. **Choose a provider.**
+   - **Local GPU - Qwen GGUF Edit** runs Qwen-Image-Edit locally on your NVIDIA
+     GPU and uses a VRAM-selected Unsloth GGUF quant.
+   - **Online - Venice Media Local** sends the edit to Venice Media Local. This
+     requires Venice Media Local to be open with its **AI Agent Control** /
+     **AI Agent Remote Control** enabled.
+4. **Add optional prompt additions.** Use the preset chips or type extra text
+   such as `keep the original background`, `add warm rim light`, or
+   `make the room moodier`.
+5. **Generate.** The result is saved to the output folder next to the app.
 
-## Requirements
+## Which Provider Should I Use?
 
-- Windows (other platforms can build from source via Tauri).
-- An NVIDIA GPU for real-speed generation. The suite standardizes on **CUDA
-  cu128**, the only build that covers both Blackwell (RTX 5090, sm_120) and
-  Ampere (RTX 3090, sm_86).
-- Python 3.10, 3.11, or 3.12 on PATH (used once to bootstrap the app-managed
-  virtual environment). `uv` is used automatically when present for fast,
-  hardlinked installs.
-- Node.js 20+ and the Rust toolchain to build from source.
+Use **Local GPU - Qwen GGUF Edit** when you want the intended Multi-Angle Edit
+behavior. This is the path built around Qwen-Image-Edit 2511 plus
+`fal/Qwen-Image-Edit-2511-Multiple-Angles-LoRA`.
 
-## First run
+Use **Online - Venice Media Local** when you want to try the same camera picker
+with an edit model selected in Venice Media Local. Multi-Angle Edit talks to
+Venice through Venice's local AI Agent Control API. If Venice is closed, or AI
+Agent Control is disabled in Venice, this provider cannot work.
 
-On the first generation the app creates its own virtual environment and installs
-PyTorch (cu128) + diffusers, then downloads the Qwen-Image-Edit model and the
-Multiple-Angles LoRA into the shared store. This is a large one-time download.
-Subsequent runs — and other suite apps that need the same wheels — reuse the
-shared cache.
+Venice may route the prompt to Qwen, Grok Imagine, GPT Image, or another
+edit-capable model depending on what Venice Media Local exposes and what you
+selected there. Non-Qwen models can still be useful, but they may interpret
+camera-angle instructions differently and may ignore the Qwen `<sks>` trigger
+token.
 
-## The shared NekoLegendsAI store
+## Venice Media Local Setup
 
-Models and caches live in a single visible folder (default `D:\NekoLegendsAI`)
-shared across the suite:
+The Venice provider depends on
+[Venice Media Local](https://github.com/neko-legends/VeniceMediaLocal).
 
+1. Open Venice Media Local.
+2. Enable **AI Agent Control** / **AI Agent Remote Control** inside Venice Media
+   Local.
+3. Select the edit or DiT model you want Venice to use.
+4. Return to Multi-Angle Edit and choose **Online - Venice Media Local**.
+
+When linked, Multi-Angle Edit reads Venice's local status and sends the edit to
+Venice's `/api/v1/edit-image` endpoint. Recent Venice builds expose the selected
+edit model through local state, so Multi-Angle Edit can use the same model you
+picked in Venice.
+
+## Local Qwen Requirements
+
+- Windows.
+- NVIDIA GPU for practical local generation. CPU fallback exists, but it is very
+  slow.
+- Python 3.10, 3.11, or 3.12 on PATH for the first-run environment bootstrap.
+- Node.js 20+ and the Rust toolchain only if you are building from source.
+
+The local path was built and tested around an RTX 5090 + RTX 3090 workstation.
+It uses CUDA cu128 so both Blackwell and Ampere GPUs are covered.
+
+## First Local Run
+
+The first local generation can take a while. The app creates its own Python
+environment, installs PyTorch, diffusers, and GGUF support, then downloads:
+
+- Qwen-Image-Edit 2511 pipeline files.
+- A VRAM-selected `unsloth/Qwen-Image-Edit-2511-GGUF` transformer quant.
+- `fal/Qwen-Image-Edit-2511-Multiple-Angles-LoRA`.
+
+The worker avoids the full 16-bit Qwen transformer shards by default. To force a
+specific quant, set `MULTIANGLE_QWEN_GGUF_QUANT` to `Q8_0`, `Q6_K`, `Q5_K_M`,
+`Q4_K_M`, `Q3_K_M`, or `Q2_K`.
+
+## Shared Model Cache
+
+Models and caches live in a visible shared folder, usually:
+
+```text
+D:\NekoLegendsAI\
+  models\   Hugging Face model cache
+  cache\    pip / uv / torch caches
+  envs\
+    multiangleedit\   this app's Python environment
 ```
-NekoLegendsAI/
-  models/   HF_HOME — models downloaded once
-  cache/    pip / uv / torch caches
-  envs/
-    multiangleedit/   this app's virtual environment
+
+The app discovers the shared store automatically and falls back to an app-local
+store if needed. The resolved store path is shown in the app footer.
+
+## Prompt Behavior
+
+The angle picker creates a Qwen-style angle prompt like:
+
+```text
+<sks> right side view high-angle shot close-up
 ```
 
-The app discovers the store automatically and falls back to an app-local store
-if none is available, so it always works standalone. See
-[NekoLegendsAI-Shared](../NekoLegendsAI-Shared) for the resolver details. The
-resolved store path is shown in the app footer.
+Multi-Angle Edit also adds a short preservation instruction so the model tries
+to keep the original subject, outfit, materials, background, lighting direction,
+color palette, and general style unless your prompt additions explicitly change
+them.
+
+## AI Agent Control
+
+Multi-Angle Edit can expose its own local HTTP API so trusted tools such as
+Codex, Claude Code, or other local agents can drive it. This is separate from
+Venice Media Local's AI Agent Control.
+
+Multi-Angle Edit's API:
+
+- Off by default.
+- Binds to `127.0.0.1`.
+- Defaults to port `17339`.
+- Can be enabled in the in-app **AI Agent Control** panel.
+- Publishes status to `%APPDATA%\NekoLegends\agent-api-registry.json` for the
+  Neko Legends Control Center.
+
+Useful endpoints:
+
+- `GET /health` - API status.
+- `GET /openapi.json` - OpenAPI description.
+- `GET /gpus` - detected GPUs.
+- `GET /store` - shared NekoLegendsAI store info.
+- `POST /generate` - run a local multi-angle edit.
+
+Example `POST /generate` body:
+
+```json
+{
+  "imagePath": "D:\\Images\\source.png",
+  "anglePrompt": "<sks> right side view high-angle shot close-up",
+  "deviceIndex": 0,
+  "extraPrompt": "keep the original background",
+  "outputDir": "D:\\Images\\out"
+}
+```
+
+Agent note: if an agent wants to use the **Venice Media Local** provider, Venice
+Media Local must also be open and its own AI Agent Control must be enabled.
 
 ## Development
 
 ```bash
 npm install
 npm run tauri:dev      # run the app in dev mode
-npm run tauri:build    # produce an installer under src-tauri/target/release/bundle/nsis
+npm run tauri:build    # build the Tauri app
+npm run release:build  # publish release/portable and release/installer outputs
 ```
 
-## AI Agent Control (local HTTP API)
-
-Like the other apps in the suite, Multi-Angle Edit can expose a local HTTP API
-so trusted tools (Codex, Claude Code, other agents) on the same machine can drive
-it. It is **off by default**, binds to `127.0.0.1`, defaults to port **17339**,
-and is toggled from the in-app "AI Agent Control" panel. When enabled it
-publishes its status to the shared registry at
-`%APPDATA%\NekoLegends\agent-api-registry.json`, which the Neko Legends Control
-Center reads to show live status and flag port conflicts.
-
-Endpoints:
-
-- `GET /health` — API status (enabled, port).
-- `GET /openapi.json` — OpenAPI description.
-- `GET /gpus` — list detected GPUs.
-- `GET /store` — shared NekoLegendsAI store info.
-- `POST /generate` — run a multi-angle edit. Body:
-  `{ "imagePath": "...", "anglePrompt": "<sks> right side view ...", "deviceIndex": 0, "extraPrompt": "", "outputDir": "" }`
-
 The Python worker lives at `python/multi_angle_worker.py` and is bundled as a
-Tauri resource. It is a two-phase script: launched under the system Python it
-bootstraps the venv, then re-execs itself inside that venv to run inference.
+Tauri resource.
 
 ## License
 

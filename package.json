@@ -1,7 +1,7 @@
 {
   "name": "multi-angle-edit",
   "private": true,
-  "version": "0.1.0",
+  "version": "26.6.29",
   "license": "MIT",
   "type": "module",
   "scripts": {
@@ -10,7 +10,9 @@
     "preview": "vite preview --host 127.0.0.1 --port 1423",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
-    "tauri:build": "tauri build"
+    "tauri:build": "tauri build",
+    "release:publish": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/publish-release.ps1",
+    "release:build": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/publish-release.ps1 -Build"
   },
   "dependencies": {
     "@tauri-apps/api": "2.11.0",

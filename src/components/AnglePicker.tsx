@@ -16,11 +16,10 @@
 
 import { useEffect, useRef } from "react";
 import * as THREE from "three";
-import { convertFileSrc } from "@tauri-apps/api/core";
 import { clamp, wrapAzimuth, type AngleValue } from "../lib/anglePrompt";
 
 export interface AnglePickerProps {
-  imagePath?: string;
+  imagePreviewSrc?: string;
   value: AngleValue;
   onChange: (value: AngleValue) => void;
 }
@@ -34,7 +33,7 @@ function distanceToRadius(distance: number): number {
 }
 
 export default function AnglePicker({
-  imagePath,
+  imagePreviewSrc,
   value,
   onChange,
 }: AnglePickerProps) {
@@ -182,32 +181,45 @@ export default function AnglePicker({
     resizeObserver.observe(mount);
     window.addEventListener("resize", handleResize);
 
-    // --- pointer drag -> azimuth / elevation -------------------------------
-    let dragging = false;
+    // --- pointer drag -> orbit / zoom --------------------------------------
+    type DragMode = "orbit" | "zoom";
+    let dragMode: DragMode | null = null;
     let lastX = 0;
     let lastY = 0;
 
     const onPointerDown = (e: PointerEvent) => {
-      dragging = true;
+      if (e.button !== 0 && e.button !== 1) return;
+      e.preventDefault();
+      dragMode = e.button === 1 ? "zoom" : "orbit";
       lastX = e.clientX;
       lastY = e.clientY;
-      renderer.domElement.style.cursor = "grabbing";
+      renderer.domElement.style.cursor =
+        dragMode === "zoom" ? "ns-resize" : "grabbing";
       renderer.domElement.setPointerCapture(e.pointerId);
     };
     const onPointerMove = (e: PointerEvent) => {
-      if (!dragging) return;
+      if (!dragMode) return;
+      e.preventDefault();
       const dx = e.clientX - lastX;
       const dy = e.clientY - lastY;
       lastX = e.clientX;
       lastY = e.clientY;
       const v = valueRef.current;
+
+      if (dragMode === "zoom") {
+        // Drag down = zoom out, drag up = zoom in. Mirrors wheel direction.
+        const distance = clamp(v.distance + dy * 0.035, 0, 10);
+        onChangeRef.current({ ...v, distance });
+        return;
+      }
+
       // 0.5 deg per pixel feels natural for both axes.
       const azimuth = wrapAzimuth(v.azimuth + dx * 0.5);
       const elevation = clamp(v.elevation + dy * 0.5, -30, 60);
       onChangeRef.current({ ...v, azimuth, elevation });
     };
     const endDrag = (e: PointerEvent) => {
-      dragging = false;
+      dragMode = null;
       renderer.domElement.style.cursor = "grab";
       try {
         renderer.domElement.releasePointerCapture(e.pointerId);
@@ -222,6 +234,9 @@ export default function AnglePicker({
       const distance = clamp(v.distance + (e.deltaY > 0 ? 0.6 : -0.6), 0, 10);
       onChangeRef.current({ ...v, distance });
     };
+    const preventMiddleClick = (e: MouseEvent) => {
+      if (e.button === 1) e.preventDefault();
+    };
 
     const el = renderer.domElement;
     el.addEventListener("pointerdown", onPointerDown);
@@ -230,6 +245,7 @@ export default function AnglePicker({
     el.addEventListener("pointercancel", endDrag);
     el.addEventListener("pointerleave", endDrag);
     el.addEventListener("wheel", onWheel, { passive: false });
+    el.addEventListener("auxclick", preventMiddleClick);
 
     // --- teardown ----------------------------------------------------------
     return () => {
@@ -242,6 +258,7 @@ export default function AnglePicker({
       el.removeEventListener("pointercancel", endDrag);
       el.removeEventListener("pointerleave", endDrag);
       el.removeEventListener("wheel", onWheel);
+      el.removeEventListener("auxclick", preventMiddleClick);
 
       // Dispose geometry / materials / textures.
       scene.traverse((obj) => {
@@ -268,13 +285,13 @@ export default function AnglePicker({
     };
   }, []);
 
-  // ---- load / swap the image texture when imagePath changes ---------------
+  // ---- load / swap the image texture when the source preview changes ------
   useEffect(() => {
     const card = subjectRef.current;
     const placeholder = placeholderRef.current;
     if (!card) return;
 
-    if (!imagePath) {
+    if (!imagePreviewSrc) {
       card.visible = false;
       if (placeholder) placeholder.visible = true;
       return;
@@ -282,9 +299,8 @@ export default function AnglePicker({
 
     let cancelled = false;
     const loader = new THREE.TextureLoader();
-    const url = convertFileSrc(imagePath);
     loader.load(
-      url,
+      imagePreviewSrc,
       (texture) => {
         if (cancelled) {
           texture.dispose();
@@ -325,7 +341,7 @@ export default function AnglePicker({
     return () => {
       cancelled = true;
     };
-  }, [imagePath]);
+  }, [imagePreviewSrc]);
 
   return <div className="angle-canvas" ref={mountRef} />;
 }
