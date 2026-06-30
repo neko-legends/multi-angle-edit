@@ -4,8 +4,11 @@ Multi-Angle Edit turns one source image into a new camera angle. Pick an image,
 aim a simple 3D camera widget, and generate a new view such as front, side,
 back, high-angle, close-up, or wide shot.
 
-The app is designed for **Qwen-Image-Edit** with the
-**Multiple-Angles LoRA** camera-angle add-on. It can also send edits through
+The app is designed for
+[Qwen-Image-Edit 2511](https://huggingface.co/Qwen/Qwen-Image-Edit-2511) with
+the
+[Multiple-Angles LoRA](https://huggingface.co/fal/Qwen-Image-Edit-2511-Multiple-Angles-LoRA)
+camera-angle add-on. It can also send edits through
 [Venice Media Local](https://github.com/neko-legends/VeniceMediaLocal), but
 other image-edit models may not follow the Qwen angle vocabulary as reliably.
 
@@ -36,7 +39,7 @@ and Hugging Face models can be reused instead of downloaded over and over.
 
 Use **Local GPU - Qwen GGUF Edit** when you want the intended Multi-Angle Edit
 behavior. This is the path built around Qwen-Image-Edit 2511 plus
-`fal/Qwen-Image-Edit-2511-Multiple-Angles-LoRA`.
+[`fal/Qwen-Image-Edit-2511-Multiple-Angles-LoRA`](https://huggingface.co/fal/Qwen-Image-Edit-2511-Multiple-Angles-LoRA).
 
 Use **Online - Venice Media Local** when you want to try the same camera picker
 with an edit model selected in Venice Media Local. Multi-Angle Edit talks to
@@ -81,9 +84,12 @@ It uses CUDA cu128 so both Blackwell and Ampere GPUs are covered.
 The first local generation can take a while. The app creates its own Python
 environment, installs PyTorch, diffusers, and GGUF support, then downloads:
 
-- Qwen-Image-Edit 2511 pipeline files.
-- A VRAM-selected `unsloth/Qwen-Image-Edit-2511-GGUF` transformer quant.
-- `fal/Qwen-Image-Edit-2511-Multiple-Angles-LoRA`.
+- [Qwen-Image-Edit 2511](https://huggingface.co/Qwen/Qwen-Image-Edit-2511)
+  pipeline files.
+- A VRAM-selected
+  [`unsloth/Qwen-Image-Edit-2511-GGUF`](https://huggingface.co/unsloth/Qwen-Image-Edit-2511-GGUF)
+  transformer quant.
+- [`fal/Qwen-Image-Edit-2511-Multiple-Angles-LoRA`](https://huggingface.co/fal/Qwen-Image-Edit-2511-Multiple-Angles-LoRA).
 
 The worker avoids the full 16-bit Qwen transformer shards by default. To force a
 specific quant, set `MULTIANGLE_QWEN_GGUF_QUANT` to `Q8_0`, `Q6_K`, `Q5_K_M`,
@@ -154,6 +160,18 @@ Example `POST /generate` body:
 
 Agent note: if an agent wants to use the **Venice Media Local** provider, Venice
 Media Local must also be open and its own AI Agent Control must be enabled.
+
+## Model Credits
+
+Multi-Angle Edit is an app wrapper around upstream image-edit models and LoRA
+weights. Please check each upstream model card for its license and usage terms:
+
+- [Qwen/Qwen-Image-Edit-2511](https://huggingface.co/Qwen/Qwen-Image-Edit-2511)
+  provides the base image-edit pipeline files.
+- [unsloth/Qwen-Image-Edit-2511-GGUF](https://huggingface.co/unsloth/Qwen-Image-Edit-2511-GGUF)
+  provides quantized GGUF transformer files for lower VRAM local generation.
+- [fal/Qwen-Image-Edit-2511-Multiple-Angles-LoRA](https://huggingface.co/fal/Qwen-Image-Edit-2511-Multiple-Angles-LoRA)
+  provides the camera-angle LoRA that teaches the `<sks>` angle vocabulary.
 
 ## Development
 
