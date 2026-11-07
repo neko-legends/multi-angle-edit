@@ -328,11 +328,59 @@ fn local_model_status(app: AppHandle) -> Result<LocalModelStatus, String> {
     })
 }
 
-#[cfg_attr(not(target_os = "windows"), allow(unused_variables))]
+/// Prepare a child process (python, nvidia-smi, ...): no console window on
+/// Windows, and no AppImage-only environment on Linux.
+#[cfg_attr(
+    not(any(target_os = "windows", target_os = "linux")),
+    allow(unused_variables)
+)]
 fn hide_window(command: &mut Command) {
     #[cfg(target_os = "windows")]
     {
         command.creation_flags(CREATE_NO_WINDOW);
+    }
+    #[cfg(target_os = "linux")]
+    strip_appimage_env(command);
+}
+
+/// An AppImage's AppRun points PYTHONHOME, PYTHONPATH, LD_LIBRARY_PATH, PATH
+/// and friends at the bundle so the app itself loads its own libraries.
+/// System tools started from the app (python3, uv, nvidia-smi) must not
+/// inherit that, or python3 fails to start ("No module named encodings").
+#[cfg(target_os = "linux")]
+fn strip_appimage_env(command: &mut Command) {
+    let Some(appdir) = env::var_os("APPDIR").map(PathBuf::from) else {
+        return;
+    };
+    if env::var_os("APPIMAGE").is_none() {
+        return;
+    }
+    for key in [
+        "PYTHONHOME",
+        "PYTHONPATH",
+        "PYTHONDONTWRITEBYTECODE",
+        "LD_LIBRARY_PATH",
+        "PERLLIB",
+        "QT_PLUGIN_PATH",
+        "GTK_PATH",
+        "GTK_DATA_PREFIX",
+        "GTK_EXE_PREFIX",
+        "GTK_IM_MODULE_FILE",
+        "GDK_PIXBUF_MODULE_FILE",
+        "GIO_EXTRA_MODULES",
+        "GSETTINGS_SCHEMA_DIR",
+    ] {
+        command.env_remove(key);
+    }
+    for key in ["PATH", "XDG_DATA_DIRS"] {
+        if let Some(value) = env::var_os(key) {
+            let kept = env::split_paths(&value)
+                .filter(|path| !path.as_os_str().is_empty() && !path.starts_with(&appdir))
+                .collect::<Vec<_>>();
+            if let Ok(joined) = env::join_paths(kept) {
+                command.env(key, joined);
+            }
+        }
     }
 }
 
