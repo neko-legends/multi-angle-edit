@@ -226,6 +226,26 @@ def nvidia_smi_available() -> bool:
     return True
 
 
+def find_uv() -> str | None:
+    """Locate ``uv``: PATH first, then its usual per-user install locations.
+
+    Desktop launchers on Linux often start apps with a minimal PATH that lacks
+    ``~/.local/bin`` or mise shims, where uv normally lives.
+    """
+    found = shutil.which("uv")
+    if found or platform.system() == "Windows":
+        return found
+    home = Path.home()
+    for candidate in [
+        home / ".local" / "bin" / "uv",
+        home / ".cargo" / "bin" / "uv",
+        home / ".local" / "share" / "mise" / "shims" / "uv",
+    ]:
+        if candidate.is_file() and os.access(candidate, os.X_OK):
+            return str(candidate)
+    return None
+
+
 def ensure_env(env_dir: Path, device_index: int) -> Path:
     """Create/validate the venv and install all dependencies into it.
 
@@ -236,14 +256,23 @@ def ensure_env(env_dir: Path, device_index: int) -> Path:
     """
     env_dir.mkdir(parents=True, exist_ok=True)
     python_path = venv_python(env_dir)
-    use_uv = shutil.which("uv") is not None
+    uv = find_uv()
+    use_uv = uv is not None
+
+    torch_marker = env_dir / TORCH_MARKER
+    deps_marker = env_dir / DEPS_MARKER
+    legacy_deps_marker = env_dir / LEGACY_DEPS_MARKER
 
     # --- Create the virtual environment ----------------------------------- #
     if not python_path.exists():
+        # Markers without this platform's interpreter belong to a venv that is
+        # gone or was built by another OS; they must not skip the installs.
+        for marker in (torch_marker, deps_marker, legacy_deps_marker):
+            marker.unlink(missing_ok=True)
         if use_uv:
             emit("setup", f"Creating Python environment with uv: {env_dir}")
             run_checked(
-                ["uv", "venv", "--python", "3.11", str(env_dir)],
+                [uv, "venv", "--python", "3.11", str(env_dir)],
                 "Creating virtual environment",
             )
         else:
@@ -256,10 +285,6 @@ def ensure_env(env_dir: Path, device_index: int) -> Path:
             f"Ensure a compatible system Python (3.10-3.12) is installed and on PATH."
         )
 
-    torch_marker = env_dir / TORCH_MARKER
-    deps_marker = env_dir / DEPS_MARKER
-    legacy_deps_marker = env_dir / LEGACY_DEPS_MARKER
-
     # If everything is already installed, short-circuit.
     if torch_marker.exists() and deps_marker.exists():
         return python_path
@@ -267,7 +292,7 @@ def ensure_env(env_dir: Path, device_index: int) -> Path:
     # Build the install-command prefix for the chosen installer.
     def install_cmd(extra: list[str]) -> list[str]:
         if use_uv:
-            return ["uv", "pip", "install", "--python", str(python_path), *extra]
+            return [uv, "pip", "install", "--python", str(python_path), *extra]
         return [str(python_path), "-m", "pip", "install", *extra]
 
     # --- Bootstrap packaging tools (stdlib-venv path only) ---------------- #

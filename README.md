@@ -70,10 +70,12 @@ picked in Venice.
 
 ## Local Qwen Requirements
 
-- Windows.
+- Windows, or Linux (tested on Omarchy / Arch with Wayland).
 - NVIDIA GPU for practical local generation. CPU fallback exists, but it is very
   slow.
 - Python 3.10, 3.11, or 3.12 on PATH for the first-run environment bootstrap.
+  On Linux any `python3` 3.10 or newer works when [`uv`](https://docs.astral.sh/uv/)
+  is installed: the app then builds its environment with a uv-managed Python 3.11.
 - Node.js 20+ and the Rust toolchain only if you are building from source.
 
 The local path was built and tested around an RTX 5090 + RTX 3090 workstation.
@@ -106,6 +108,12 @@ D:\NekoLegendsAI\
   envs\
     multiangleedit\   this app's Python environment
 ```
+
+On Linux the default store is `~/NekoLegendsAI`, the Python environment is
+`envs/multiangleedit-linux` (so a store shared with Windows keeps both), and the
+Linux build is an `.AppImage`. To reuse a store on another drive, set
+`NEKO_AI_HOME` or point `~/NekoLegendsAI/store.json` (`{"root": "/path/to/NekoLegendsAI"}`)
+at it.
 
 The app discovers the shared store automatically and falls back to an app-local
 store if needed. The resolved store path is shown in the app footer.

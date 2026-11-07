@@ -230,14 +230,48 @@ fn neko_store(app: &AppHandle) -> Result<NekoStore, String> {
     ))
 }
 
-fn default_output_dir(app: &AppHandle) -> Result<PathBuf, String> {
-    // Prefer an `output` folder next to the executable; fall back to app data.
-    let base = std::env::current_exe()
+/// The app's Python environment directory.
+///
+/// A shared store can sit on a drive used by both Windows and Linux (dual boot),
+/// so on Linux the shared venv gets its own `<slug>-linux` folder instead of
+/// reusing (and clobbering) the Windows venv and its install markers.
+fn app_env_dir(store: &NekoStore) -> PathBuf {
+    if cfg!(target_os = "windows") || !store.shared {
+        return store.env_dir.clone();
+    }
+    store
+        .env_dir
+        .with_file_name(format!("{NEKO_APP_SLUG}-{}", env::consts::OS))
+}
+
+/// Folder the app's executable lives in, for the "output next to the app"
+/// default. On Linux an AppImage runs from a temporary read-only mount, so use
+/// the folder holding the `.AppImage` file itself.
+fn app_install_dir() -> Option<PathBuf> {
+    #[cfg(target_os = "linux")]
+    if let Some(appimage) = env::var_os("APPIMAGE").map(PathBuf::from) {
+        return appimage.parent().map(Path::to_path_buf);
+    }
+    std::env::current_exe()
         .ok()
         .and_then(|p| p.parent().map(Path::to_path_buf))
+}
+
+fn default_output_dir(app: &AppHandle) -> Result<PathBuf, String> {
+    // Prefer an `output` folder next to the executable; fall back to app data.
+    let base = app_install_dir()
         .map(|p| p.join("output"))
         .unwrap_or(app_data_dir(app)?.join("output"));
-    fs::create_dir_all(&base).map_err(|error| format!("Unable to create output dir: {error}"))?;
+    if let Err(error) = fs::create_dir_all(&base) {
+        // Read-only install location (e.g. /usr/bin on Linux): use app data.
+        if cfg!(target_os = "windows") {
+            return Err(format!("Unable to create output dir: {error}"));
+        }
+        let fallback = app_data_dir(app)?.join("output");
+        fs::create_dir_all(&fallback)
+            .map_err(|error| format!("Unable to create output dir: {error}"))?;
+        return Ok(fallback);
+    }
     Ok(base)
 }
 
@@ -262,9 +296,10 @@ fn hf_repo_cache_ready(hf_home: &Path, repo_cache_dir: &str) -> bool {
 #[tauri::command]
 fn local_model_status(app: AppHandle) -> Result<LocalModelStatus, String> {
     let store = neko_store(&app)?;
-    let env_ready = venv_python_path(&store.env_dir).exists();
-    let torch_ready = store.env_dir.join(".multiangle-torch-ready").exists();
-    let deps_ready = store.env_dir.join(".multiangle-deps-gguf-ready").exists();
+    let env_dir = app_env_dir(&store);
+    let env_ready = venv_python_path(&env_dir).exists();
+    let torch_ready = env_dir.join(".multiangle-torch-ready").exists();
+    let deps_ready = env_dir.join(".multiangle-deps-gguf-ready").exists();
     let hf_home = store.hf_home();
     let model_ready = hf_repo_cache_ready(&hf_home, QWEN_MODEL_CACHE_DIR)
         && hf_repo_cache_ready(&hf_home, QWEN_GGUF_MODEL_CACHE_DIR);
@@ -287,12 +322,13 @@ fn local_model_status(app: AppHandle) -> Result<LocalModelStatus, String> {
         model_ready,
         lora_ready,
         store_root: store.root.display().to_string(),
-        env_dir: store.env_dir.display().to_string(),
+        env_dir: env_dir.display().to_string(),
         models_dir: store.models_dir.display().to_string(),
         message,
     })
 }
 
+#[cfg_attr(not(target_os = "windows"), allow(unused_variables))]
 fn hide_window(command: &mut Command) {
     #[cfg(target_os = "windows")]
     {
@@ -334,12 +370,35 @@ fn find_python() -> Option<String> {
             "python",
         ]
     };
-    for candidate in candidates {
+    for candidate in &candidates {
         if python_ok(candidate) {
             return Some(candidate.to_string());
         }
     }
+    // Rolling-release distros (Arch/Omarchy) ship a newer Python 3 only. The
+    // bootstrap phase of the worker is stdlib-only, and it builds the venv with
+    // `uv venv --python 3.11` when uv is available, so a newer system Python is
+    // fine for starting it.
+    if !cfg!(target_os = "windows") {
+        for candidate in ["python3", "python"] {
+            if python_minor_version(candidate).is_some_and(|minor| minor >= 10) {
+                return Some(candidate.to_string());
+            }
+        }
+    }
     None
+}
+
+/// Minor version of a Python 3 interpreter (`3.14.1` -> 14).
+fn python_minor_version(spec: &str) -> Option<u32> {
+    let output = command_from_python_spec(spec).arg("--version").output().ok()?;
+    let text = format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let version = text.trim().strip_prefix("Python 3.")?;
+    version.split('.').next()?.trim().parse().ok()
 }
 
 fn python_ok(spec: &str) -> bool {
@@ -433,7 +492,11 @@ async fn generate_angle(app: AppHandle, request: AngleRequest) -> Result<String,
 
 fn run_angle_generation(app: &AppHandle, request: AngleRequest) -> Result<String, String> {
     let python = find_python().ok_or_else(|| {
-        "Python 3.10, 3.11, or 3.12 was not found on PATH. Install it and try again.".to_string()
+        if cfg!(target_os = "windows") {
+            "Python 3.10, 3.11, or 3.12 was not found on PATH. Install it and try again.".to_string()
+        } else {
+            "Python 3.10 or newer (python3) was not found on PATH. Install it and try again.".to_string()
+        }
     })?;
     let worker = worker_path(app)?;
     let store = neko_store(app)?;
@@ -461,7 +524,7 @@ fn run_angle_generation(app: &AppHandle, request: AngleRequest) -> Result<String
         angle_prompt: request.angle_prompt.clone(),
         extra_prompt: request.extra_prompt.clone().unwrap_or_default(),
         device_index: request.device_index,
-        env_dir: store.env_dir.display().to_string(),
+        env_dir: app_env_dir(&store).display().to_string(),
         models_dir: store.models_dir.display().to_string(),
         output_path: output_path.display().to_string(),
     };
@@ -543,7 +606,7 @@ fn store_info_value(app: &AppHandle) -> Result<serde_json::Value, String> {
     Ok(serde_json::json!({
         "root": store.root.display().to_string(),
         "shared": store.shared,
-        "envDir": store.env_dir.display().to_string(),
+        "envDir": app_env_dir(&store).display().to_string(),
         "modelsDir": store.models_dir.display().to_string(),
     }))
 }
@@ -582,6 +645,7 @@ fn normalize_preview_path(path: &str) -> PathBuf {
         .strip_prefix("file://")
         .unwrap_or(trimmed)
         .trim_start_matches("localhost/");
+    #[cfg_attr(not(target_os = "windows"), allow(unused_mut))]
     let mut normalized = percent_decode_lossy(without_scheme);
 
     #[cfg(target_os = "windows")]

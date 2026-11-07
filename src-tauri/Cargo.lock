@@ -2035,7 +2035,7 @@ dependencies = [
 
 [[package]]
 name = "multi-angle-edit"
-version = "26.6.29"
+version = "26.11.7"
 dependencies = [
  "base64 0.22.1",
  "serde",

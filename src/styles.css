@@ -1,6 +1,7 @@
 /* Multi-Angle Edit — dark creative-tool theme */
 
 :root {
+  color-scheme: dark;
   --bg: #0b0b10;
   --bg-elev: #14141d;
   --bg-card: #16161f;
