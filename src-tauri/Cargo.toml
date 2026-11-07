@@ -1,6 +1,6 @@
 [package]
 name = "multi-angle-edit"
-version = "26.11.7"
+version = "26.11.8"
 description = "Local Qwen-Image-Edit multi-angle camera tool"
 authors = ["Neko Legends contributors"]
 license = "MIT"
